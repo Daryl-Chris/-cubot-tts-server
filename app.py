@@ -6,7 +6,7 @@ import tempfile
 app = Flask(__name__)
 
 ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY2") or "YOUR_ELEVENLABS_API_KEY"
-VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Rachel
+VOICE_ID = "FGY2WhTYpPnrIDTdsKH5"  # Laura
 
 @app.route("/speak", methods=["POST"])
 def speak():
