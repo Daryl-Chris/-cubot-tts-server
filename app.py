@@ -1,11 +1,12 @@
-from flask import Flask, request, Response
+from flask import Flask, request, send_file
 import requests
 import os
+import tempfile
 
 app = Flask(__name__)
 
 ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY2") or "YOUR_ELEVENLABS_API_KEY"
-VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Rachel's voice
+VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Rachel
 
 @app.route("/speak", methods=["POST"])
 def speak():
@@ -24,17 +25,24 @@ def speak():
         "Content-Type": "application/json"
     }
 
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}/stream"
-    r = requests.post(url, headers=headers, json=payload, stream=True)
+    tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
 
-    def stream():
-        for chunk in r.iter_content(chunk_size=1024):
-            if chunk:
-                yield chunk
+    try:
+        r = requests.post(tts_url, headers=headers, json=payload)
+        if r.status_code != 200:
+            return {"error": f"ElevenLabs error: {r.text}"}, r.status_code
 
-    return Response(stream(), mimetype="audio/mpeg")
+        # Save to temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+        temp_file.write(r.content)
+        temp_file.close()
 
-# 🚨 Required for Render to detect the open port
+        return send_file(temp_file.name, mimetype="audio/mpeg", as_attachment=False)
+
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+# 👇 Required by Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
