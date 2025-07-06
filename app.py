@@ -1,11 +1,10 @@
 from flask import Flask, request, send_file
-import requests, tempfile, os
-from pydub import AudioSegment
+import requests, os, tempfile, subprocess
 
 app = Flask(__name__)
 
-ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY2") or "your_key"
-VOICE_ID = "FGY2WhTYpPnrIDTdsKH5"  # Laura voice
+ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY2") or "your_elevenlabs_key"
+VOICE_ID = "FGY2WhTYpPnrIDTdsKH5"  # Laura
 
 @app.route("/speak", methods=["POST"])
 def speak():
@@ -25,25 +24,31 @@ def speak():
     }
 
     tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
+
     try:
+        # Request TTS MP3
         r = requests.post(tts_url, headers=headers, json=payload)
         if r.status_code != 200:
-            return {"error": f"ElevenLabs: {r.text}"}, r.status_code
+            return {"error": f"ElevenLabs error: {r.text}"}, r.status_code
 
-        # Save MP3 to temp
-        tmp_mp3 = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-        tmp_mp3.write(r.content)
-        tmp_mp3.close()
+        # Save MP3 to temp file
+        mp3_path = tempfile.mktemp(suffix=".mp3")
+        with open(mp3_path, "wb") as f:
+            f.write(r.content)
 
-        # Convert to WAV (Mono, 22050Hz)
-        sound = AudioSegment.from_file(tmp_mp3.name, format="mp3")
-        sound = sound.set_channels(1).set_frame_rate(22050)
-        tmp_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-        sound.export(tmp_wav.name, format="wav")
-        tmp_wav.close()
+        # Convert MP3 to WAV using ffmpeg
+        wav_path = tempfile.mktemp(suffix=".wav")
+        cmd = ["ffmpeg", "-y", "-i", mp3_path, "-ac", "1", "-ar", "22050", wav_path]
+        subprocess.run(cmd, check=True)
 
-        os.unlink(tmp_mp3.name)
-        return send_file(tmp_wav.name, mimetype="audio/wav", as_attachment=False)
+        os.remove(mp3_path)  # cleanup
+
+        return send_file(wav_path, mimetype="audio/wav", as_attachment=False)
 
     except Exception as e:
         return {"error": str(e)}, 500
+
+# Required by Render
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
